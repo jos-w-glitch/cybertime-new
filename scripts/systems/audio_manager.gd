@@ -9,6 +9,7 @@ var _beating := false
 var _current_music_path := ""
 var music_volume := 0.55
 var sfx_volume := 0.7
+var _sfx_stop_token := 0
 
 
 func _ready() -> void:
@@ -33,7 +34,16 @@ func _process(delta: float) -> void:
 func play_menu_music() -> void:
 	_beating = false
 	beat_callback = Callable()
-	_play_stream("res://assets/music/menu.mp3", true)
+	_play_stream("res://assets/music/menu.mp3", true, 0.0, music_volume)
+
+
+func prepare_level_music(level: Dictionary) -> void:
+	# Decode/start the track during the start-orb screen so phones aren't silent
+	# (or stuck on beep SFX) for the first seconds of a run.
+	_beating = false
+	beat_callback = Callable()
+	var path := LevelData.resolve_music(level)
+	_play_stream(path, true, 0.0, 0.0001)
 
 
 func start_level_music(level: Dictionary, on_beat: Callable) -> void:
@@ -42,8 +52,11 @@ func start_level_music(level: Dictionary, on_beat: Callable) -> void:
 	_beat_accum = 0.0
 	_beating = true
 	var path := LevelData.resolve_music(level)
-	var start_at := float(level.get("music_start", -1.0))
-	_play_stream(path, true, start_at)
+	if _current_music_path == path and music_player.stream != null:
+		music_player.volume_db = linear_to_db(music_volume)
+		music_player.play(0.0)
+		return
+	_play_stream(path, true, 0.0, music_volume)
 
 
 func set_music_fade(seconds_left: float, fade_span: float) -> void:
@@ -70,35 +83,32 @@ func play_defuse() -> void:
 	_beep(440.0, 0.08)
 
 
-func _play_stream(path: String, loop: bool, start_at: float = 0.0) -> void:
-	if not ResourceLoader.exists(path):
+func _play_stream(path: String, loop: bool, from_pos: float, linear_vol: float) -> void:
+	if path == "" or not ResourceLoader.exists(path):
+		push_warning("CyberTime: missing music %s" % path)
 		return
-	if _current_music_path == path and music_player.playing:
-		music_player.volume_db = linear_to_db(music_volume)
+	if _current_music_path == path and music_player.playing and music_player.stream != null:
+		music_player.volume_db = linear_to_db(linear_vol)
+		if from_pos >= 0.0:
+			music_player.seek(from_pos)
 		return
 	var stream: AudioStream = load(path)
+	if stream == null:
+		push_warning("CyberTime: failed to load music %s" % path)
+		return
 	if stream is AudioStreamMP3:
 		(stream as AudioStreamMP3).loop = loop
+	music_player.stop()
 	music_player.stream = stream
-	music_player.volume_db = linear_to_db(music_volume)
+	music_player.volume_db = linear_to_db(linear_vol)
 	_current_music_path = path
-	var from_pos := _resolve_start_position(path, stream, start_at)
-	music_player.play(from_pos)
-
-
-func _resolve_start_position(path: String, stream: AudioStream, start_at: float) -> float:
-	if start_at >= 0.0:
-		return start_at
-	# Full YouTube-rip World 2 tracks often have ~15s of lead-in silence.
-	# Trimmed/web tracks are short and should start immediately.
-	if "world2" in path and stream.get_length() > 90.0:
-		return 15.0
-	return 0.0
+	music_player.play(maxf(0.0, from_pos))
 
 
 func _beep(hz: float, duration: float) -> void:
 	var gen := AudioStreamGenerator.new()
 	gen.mix_rate = 22050
+	gen.buffer_length = 0.1
 	sfx_player.stream = gen
 	sfx_player.volume_db = linear_to_db(sfx_volume)
 	sfx_player.play()
@@ -110,3 +120,11 @@ func _beep(hz: float, duration: float) -> void:
 		var t := float(i) / gen.mix_rate
 		var sample := sin(TAU * hz * t) * 0.25 * (1.0 - float(i) / float(frames))
 		playback.push_frame(Vector2(sample, sample))
+	_sfx_stop_token += 1
+	var token := _sfx_stop_token
+	get_tree().create_timer(duration + 0.03).timeout.connect(func() -> void:
+		if token != _sfx_stop_token:
+			return
+		if sfx_player.stream is AudioStreamGenerator:
+			sfx_player.stop()
+	)

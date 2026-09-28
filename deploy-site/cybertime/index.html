@@ -69,6 +69,11 @@ body {
 	animation: boot-pulse 1.6s ease-in-out infinite;
 }
 
+#boot-bytes {
+	font-size: 0.8rem;
+	letter-spacing: 0.08em;
+	color: #607080;
+}
 #boot-sub {
 	font-size: 0.85rem;
 	letter-spacing: 0.28em;
@@ -126,7 +131,7 @@ body {
 		</style>
 		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
-<base href="/cybertime/">
+<base href="/cybertime/"><link rel="preload" href="index.wasm" as="fetch" crossorigin><link rel="preload" href="index.pck" as="fetch" crossorigin><link rel="preload" href="index.js" as="script">
 	</head>
 	<body>
 		<canvas id="canvas">
@@ -140,6 +145,7 @@ body {
 		<div id="status">
 			<div id="boot-brand">CyberTime</div>
 			<div id="boot-sub">Loading grid sync</div>
+			<div id="boot-bytes">Preparing download…</div>
 			<img id="status-splash" class="show-image--false fullsize--false use-filter--false" src="index.png" alt="">
 			<progress id="status-progress"></progress>
 			<div id="status-notice"></div>
@@ -147,7 +153,7 @@ body {
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":15803908,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":15807728,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
@@ -233,12 +239,18 @@ const engine = new Engine(GODOT_CONFIG);
 		setStatusMode('progress');
 		engine.startGame({
 			'onProgress': function (current, total) {
+				const label = document.getElementById('boot-bytes');
 				if (current > 0 && total > 0) {
 					statusProgress.value = current;
 					statusProgress.max = total;
+					if (label) {
+						const mb = (v) => (v / (1024 * 1024)).toFixed(1);
+						label.textContent = mb(current) + ' / ' + mb(total) + ' MB';
+					}
 				} else {
 					statusProgress.removeAttribute('value');
 					statusProgress.removeAttribute('max');
+					if (label) label.textContent = 'Downloading game data…';
 				}
 			},
 		}).then(() => {

@@ -7,6 +7,7 @@ extends Control
 
 var _font: Font
 var _file_dialog: FileDialog
+var _web_picker: Node
 
 
 func _ready() -> void:
@@ -22,12 +23,18 @@ func _ready() -> void:
 	back_btn.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/ui/main_menu.tscn")
 	)
-	_setup_file_dialog()
+	_setup_upload()
 	_refresh()
 	AudioManager.play_menu_music()
 
 
-func _setup_file_dialog() -> void:
+func _setup_upload() -> void:
+	if OS.has_feature("web"):
+		_web_picker = preload("res://scripts/systems/web_file_picker.gd").new()
+		add_child(_web_picker)
+		_web_picker.file_ready.connect(_on_web_file_ready)
+		_web_picker.cancelled.connect(_on_upload_cancelled)
+		return
 	_file_dialog = FileDialog.new()
 	_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
@@ -133,7 +140,12 @@ func _on_custom_pressed(price: int) -> void:
 
 
 func _open_upload() -> void:
-	_file_dialog.popup_centered_ratio(0.7)
+	yen_label.text = "%d COINS — CHOOSE IMAGE..." % SaveManager.coins
+	if _web_picker != null and _web_picker.is_available():
+		_web_picker.pick_image()
+		return
+	if _file_dialog != null:
+		_file_dialog.popup_centered_ratio(0.7)
 
 
 func _on_custom_file_selected(path: String) -> void:
@@ -142,6 +154,18 @@ func _on_custom_file_selected(path: String) -> void:
 		return
 	yen_label.text = "%d COINS — CUSTOM SET" % SaveManager.coins
 	_refresh()
+
+
+func _on_web_file_ready(bytes: PackedByteArray, _filename: String) -> void:
+	if not SaveManager.set_custom_background_from_bytes(bytes):
+		yen_label.text = "%d COINS — UPLOAD FAILED" % SaveManager.coins
+		return
+	yen_label.text = "%d COINS — CUSTOM SET" % SaveManager.coins
+	_refresh()
+
+
+func _on_upload_cancelled() -> void:
+	yen_label.text = "%d COINS" % SaveManager.coins
 
 
 func _buy(id: String, price: int) -> void:

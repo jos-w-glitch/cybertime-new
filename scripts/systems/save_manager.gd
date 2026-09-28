@@ -94,6 +94,19 @@ func set_custom_background_from_path(path: String) -> bool:
 	var img := Image.new()
 	if img.load(path) != OK:
 		return false
+	return _commit_custom_background(img)
+
+
+func set_custom_background_from_bytes(bytes: PackedByteArray) -> bool:
+	var img := Image.new()
+	if img.load_png_from_buffer(bytes) != OK \
+		and img.load_jpg_from_buffer(bytes) != OK \
+		and img.load_webp_from_buffer(bytes) != OK:
+		return false
+	return _commit_custom_background(img)
+
+
+func _commit_custom_background(img: Image) -> bool:
 	img.resize(1280, 720, Image.INTERPOLATE_LANCZOS)
 	if img.save_png(CUSTOM_BG_PATH) != OK:
 		return false

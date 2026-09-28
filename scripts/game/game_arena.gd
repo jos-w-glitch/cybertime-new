@@ -58,6 +58,7 @@ func setup_level(level_data: Dictionary) -> void:
 	next_target = Target.create(_active_level(), _should_slider())
 	start_target = _make_start_orb()
 	font = ArcadeFonts.get_font()
+	AudioManager.prepare_level_music(level)
 
 
 func _ready() -> void:
