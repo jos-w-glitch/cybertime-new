@@ -132,7 +132,8 @@ static func draw_floating(canvas: CanvasItem, font: Font, ft: FloatingText) -> v
 
 
 static func draw_ready(canvas: CanvasItem, font: Font, level: Dictionary) -> void:
-	text(canvas, font, "HIT THE ORB TO START", Vector2(640, 260), 28, LevelData.COLORS.gold, true)
+	text(canvas, font, "HIT THE ORB TO START", Vector2(640, 248), 32, LevelData.COLORS.gold, true)
+	text(canvas, font, str(level.name), Vector2(640, 300), 22, LevelData.COLORS.blue, true)
 	text(canvas, font, str(level.hint), Vector2(640, 470), 20, LevelData.COLORS.text, true)
 	if SaveManager.mobile_mode:
 		text(canvas, font, "TAP blue  ·  RED 2 taps  ·  ORANGE 3 taps", Vector2(640, 510), 16, LevelData.COLORS.gray, true)

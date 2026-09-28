@@ -157,7 +157,9 @@ func _is_fully_off_screen(pos: Vector2) -> bool:
 
 
 func check_click(pos: Vector2) -> String:
-	var pad := 26.0 if SaveManager.mobile_mode else 10.0
+	var pad := 34.0 if SaveManager.mobile_mode else 12.0
+	if is_slider and SaveManager.mobile_mode:
+		pad = 42.0
 	var dist := position.distance_to(pos)
 	if dist <= radius + pad:
 		return "HIT"

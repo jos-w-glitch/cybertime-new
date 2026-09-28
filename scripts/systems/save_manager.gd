@@ -32,10 +32,20 @@ var yen: int:
 func _ready() -> void:
 	load_save()
 	_load_custom_background()
+	_auto_enable_mobile_if_needed()
 	# Keep infinite coins for testing without wiping progress
 	if coins < 999999:
 		coins = 999999
 	save()
+
+
+func _auto_enable_mobile_if_needed() -> void:
+	# Phones/tablets should use tap rules without hunting for the setting.
+	if mobile_mode:
+		return
+	if DisplayServer.is_touchscreen_available() or OS.has_feature("mobile"):
+		mobile_mode = true
+		save()
 
 
 func player_level() -> int:

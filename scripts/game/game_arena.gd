@@ -30,6 +30,7 @@ var font: Font
 var fx := ArcadeFx.new()
 var anim_t := 0.0
 var _ignore_mouse_until_ms := 0
+var _ignore_miss_until_ms := 0
 
 
 func setup(level_id: int) -> void:
@@ -58,7 +59,6 @@ func setup_level(level_data: Dictionary) -> void:
 	next_target = Target.create(_active_level(), _should_slider())
 	start_target = _make_start_orb()
 	font = ArcadeFonts.get_font()
-	AudioManager.prepare_level_music(level)
 
 
 func _ready() -> void:
@@ -185,10 +185,13 @@ func _handle_click(action: String, pos: Vector2) -> void:
 		return
 	var result := current.check_click(pos)
 	if result == "MISS":
+		if Time.get_ticks_msec() < _ignore_miss_until_ms:
+			return
 		_register_miss(pos)
 		return
 	if result == "SAFE_ZONE":
 		return
+	_ignore_miss_until_ms = Time.get_ticks_msec() + 180
 	if SaveManager.mobile_mode:
 		_handle_mobile_tap(now)
 		return
@@ -362,7 +365,9 @@ func _wrong_hit() -> void:
 func _register_miss(pos: Vector2) -> void:
 	combo = 0
 	hearts -= 1
-	_float("-1", pos, LevelData.COLORS.red, 0, true)
+	var ft := FloatingText.new("-1", pos, LevelData.COLORS.red, 0, true)
+	ft.target = Vector2(40 + maxi(0, hearts) * 36, 114)
+	floating_texts.append(ft)
 	fx.miss(pos)
 	fx.damage_flash()
 	AudioManager.play_miss()
@@ -387,6 +392,8 @@ func _advance(color: Color, now: float) -> void:
 func _bump_combo() -> void:
 	combo += 1
 	combo_peak = maxi(combo_peak, combo)
+	if combo == 5 or combo == 10 or combo == 20 or combo == 30:
+		_float("COMBO x%d" % combo, Vector2(640, 200), LevelData.COLORS.gold)
 
 
 func _float(text: String, pos: Vector2, color: Color, value: int = 0, show_heart: bool = false) -> void:
@@ -419,7 +426,7 @@ func _should_slider() -> bool:
 func _make_start_orb() -> Target:
 	var t := Target.create(_active_level(), false)
 	t.position = Vector2(640, 360)
-	t.radius = 58.0 if SaveManager.mobile_mode else 48.0
+	t.radius = 68.0 if SaveManager.mobile_mode else 56.0
 	if level.allow_orange:
 		t.kind = Target.Kind.ORANGE
 	elif level.allow_red:

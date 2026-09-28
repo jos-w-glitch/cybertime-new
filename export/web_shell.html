@@ -4,6 +4,9 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
 		<title>$GODOT_PROJECT_NAME</title>
+		<link rel="preload" href="index.js" as="script">
+		<link rel="preload" href="index.wasm" as="fetch" crossorigin>
+		<link rel="preload" href="index.pck" as="fetch" crossorigin>
 		<style>
 html, body, #canvas {
 	margin: 0;
@@ -43,7 +46,7 @@ body {
 
 #status {
 	background:
-		radial-gradient(circle at 18% 18%, rgba(0, 180, 255, 0.2), transparent 42%),
+		radial-gradient(circle at 18% 18%, rgba(0, 180, 255, 0.22), transparent 42%),
 		radial-gradient(circle at 82% 78%, rgba(0, 255, 200, 0.16), transparent 44%),
 		repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.07) 2px, rgba(0, 0, 0, 0.07) 4px),
 		#0a0a12;
@@ -51,9 +54,11 @@ body {
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
-	gap: 16px;
+	gap: 14px;
 	visibility: hidden;
 	z-index: 10;
+	padding: 24px;
+	box-sizing: border-box;
 }
 
 #status-splash {
@@ -69,16 +74,28 @@ body {
 	animation: boot-pulse 1.6s ease-in-out infinite;
 }
 
-#boot-bytes {
-	font-size: 0.8rem;
-	letter-spacing: 0.08em;
-	color: #607080;
-}
 #boot-sub {
 	font-size: 0.85rem;
 	letter-spacing: 0.28em;
 	text-transform: uppercase;
 	color: #8090a0;
+}
+
+#boot-bytes {
+	font-size: 0.8rem;
+	letter-spacing: 0.08em;
+	color: #607080;
+	min-height: 1.2em;
+}
+
+#boot-tip {
+	max-width: 26rem;
+	text-align: center;
+	font-size: 0.78rem;
+	line-height: 1.45;
+	letter-spacing: 0.04em;
+	color: #6f8496;
+	min-height: 2.6em;
 }
 
 #status-progress, #status-notice {
@@ -88,8 +105,8 @@ body {
 #status-progress {
 	position: relative;
 	width: min(420px, 70vw);
-	height: 10px;
-	margin: 8px auto 0;
+	height: 12px;
+	margin: 4px auto 0;
 	appearance: none;
 	border: 1px solid rgba(0, 255, 200, 0.45);
 	border-radius: 999px;
@@ -142,10 +159,11 @@ body {
 
 		<div id="status">
 			<div id="boot-brand">CyberTime</div>
-			<div id="boot-sub">Loading grid sync</div>
+			<div id="boot-sub">Syncing neon grid</div>
 			<div id="boot-bytes">Preparing download…</div>
 			<img id="status-splash" class="$GODOT_SPLASH_CLASSES" src="$GODOT_SPLASH" alt="">
 			<progress id="status-progress"></progress>
+			<div id="boot-tip">Tip: turn MOBILE ON for tap controls</div>
 			<div id="status-notice"></div>
 		</div>
 
@@ -159,6 +177,22 @@ const engine = new Engine(GODOT_CONFIG);
 	const statusOverlay = document.getElementById('status');
 	const statusProgress = document.getElementById('status-progress');
 	const statusNotice = document.getElementById('status-notice');
+	const bootBytes = document.getElementById('boot-bytes');
+	const bootTip = document.getElementById('boot-tip');
+	const tips = [
+		'Tip: blue = tap / left click',
+		'Tip: red bombs need 2 taps on mobile',
+		'Tip: orange = 3 taps on mobile',
+		'Tip: hit sliders anywhere on the orb',
+		'Tip: build combo for bigger scores',
+		'Tip: World 2 is late-game heat',
+		'Tip: shop backgrounds change the arena',
+	];
+	let tipIndex = 0;
+	const tipTimer = setInterval(() => {
+		tipIndex = (tipIndex + 1) % tips.length;
+		if (bootTip) bootTip.textContent = tips[tipIndex];
+	}, 2800);
 
 	let initializing = true;
 	let statusMode = '';
@@ -168,6 +202,7 @@ const engine = new Engine(GODOT_CONFIG);
 			return;
 		}
 		if (mode === 'hidden') {
+			clearInterval(tipTimer);
 			statusOverlay.remove();
 			initializing = false;
 			return;
@@ -191,6 +226,7 @@ const engine = new Engine(GODOT_CONFIG);
 
 	function displayFailureNotice(err) {
 		console.error(err);
+		clearInterval(tipTimer);
 		if (err instanceof Error) {
 			setStatusNotice(err.message);
 		} else if (typeof err === 'string') {
@@ -237,18 +273,18 @@ const engine = new Engine(GODOT_CONFIG);
 		setStatusMode('progress');
 		engine.startGame({
 			'onProgress': function (current, total) {
-				const label = document.getElementById('boot-bytes');
 				if (current > 0 && total > 0) {
 					statusProgress.value = current;
 					statusProgress.max = total;
-					if (label) {
+					if (bootBytes) {
 						const mb = (v) => (v / (1024 * 1024)).toFixed(1);
-						label.textContent = mb(current) + ' / ' + mb(total) + ' MB';
+						const pct = Math.min(100, Math.round((current / total) * 100));
+						bootBytes.textContent = pct + '%  ·  ' + mb(current) + ' / ' + mb(total) + ' MB';
 					}
 				} else {
 					statusProgress.removeAttribute('value');
 					statusProgress.removeAttribute('max');
-					if (label) label.textContent = 'Downloading game data…';
+					if (bootBytes) bootBytes.textContent = 'Downloading game data…';
 				}
 			},
 		}).then(() => {
