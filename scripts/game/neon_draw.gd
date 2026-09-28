@@ -125,6 +125,12 @@ static func draw_heart(canvas: CanvasItem, pos: Vector2, size: float, color: Col
 		canvas.draw_circle(pos + Vector2(-size * 0.28, -size * 0.28), size * 0.14, Color(1, 1, 1, 0.35))
 
 
+static func draw_floating(canvas: CanvasItem, font: Font, ft: FloatingText) -> void:
+	text(canvas, font, ft.text, ft.position, 26, ft.color)
+	if ft.show_heart:
+		draw_heart(canvas, ft.position + Vector2(34, -8), 12.0, ft.color)
+
+
 static func draw_ready(canvas: CanvasItem, font: Font, level: Dictionary) -> void:
 	text(canvas, font, "HIT THE ORB TO START", Vector2(640, 260), 28, LevelData.COLORS.gold, true)
 	text(canvas, font, str(level.hint), Vector2(640, 470), 20, LevelData.COLORS.text, true)

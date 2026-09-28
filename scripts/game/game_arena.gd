@@ -29,6 +29,7 @@ var beat_count := 0
 var font: Font
 var fx := ArcadeFx.new()
 var anim_t := 0.0
+var _ignore_mouse_until_ms := 0
 
 
 func setup(level_id: int) -> void:
@@ -87,10 +88,15 @@ func _input(event: InputEvent) -> void:
 	if not running:
 		return
 	if event is InputEventScreenTouch and event.pressed:
+		# Phones also synthesize a mouse click; ignore that twin event.
+		_ignore_mouse_until_ms = Time.get_ticks_msec() + 400
 		_handle_click(_tap_action(), _touch_pos(event.position))
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventMouseButton and event.pressed:
+		if Time.get_ticks_msec() < _ignore_mouse_until_ms:
+			get_viewport().set_input_as_handled()
+			return
 		var action := _action_from_mouse(event.button_index)
 		if action == "":
 			return
@@ -355,7 +361,7 @@ func _wrong_hit() -> void:
 func _register_miss(pos: Vector2) -> void:
 	combo = 0
 	hearts -= 1
-	_float("-1 ♥", pos, LevelData.COLORS.red)
+	_float("-1", pos, LevelData.COLORS.red, 0, true)
 	fx.miss(pos)
 	fx.damage_flash()
 	AudioManager.play_miss()
@@ -382,8 +388,8 @@ func _bump_combo() -> void:
 	combo_peak = maxi(combo_peak, combo)
 
 
-func _float(text: String, pos: Vector2, color: Color, value: int = 0) -> void:
-	floating_texts.append(FloatingText.new(text, pos, color, value))
+func _float(text: String, pos: Vector2, color: Color, value: int = 0, show_heart: bool = false) -> void:
+	floating_texts.append(FloatingText.new(text, pos, color, value, show_heart))
 
 
 func _finish(won: bool) -> void:
@@ -479,7 +485,7 @@ func _draw() -> void:
 	for pt in flipped:
 		Draw.draw_flipped(self, pt)
 	for ft in floating_texts:
-		Draw.text(self, font, ft.text, ft.position, 26, ft.color)
+		Draw.draw_floating(self, font, ft)
 	fx.draw(self)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	Draw.draw_hud(self, font, score, combo, hearts, time_left, started, level, SaveManager.coins)
