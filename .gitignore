@@ -1,0 +1,7 @@
+.godot/
+*.translation
+*.tmp
+.DS_Store
+build/
+*.zip
+.vercel
