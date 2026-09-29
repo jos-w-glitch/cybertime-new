@@ -90,7 +90,11 @@ func resolve_music(level: Dictionary) -> String:
 	if primary != "" and ResourceLoader.exists(primary):
 		return primary
 	var fallback_id := int(level.get("music_fallback", level.get("id", 1)))
-	# World 2 stages fall back to the matching World 1 track (same start path).
+	var world := int(level.get("world", 1))
+	if world == 2:
+		var w2 := "res://assets/music/world2/%d.mp3" % clampi(fallback_id, 1, 7)
+		if ResourceLoader.exists(w2):
+			return w2
 	var fallback := "res://assets/music/%d.mp3" % clampi(fallback_id, 1, 12)
 	if ResourceLoader.exists(fallback):
 		return fallback

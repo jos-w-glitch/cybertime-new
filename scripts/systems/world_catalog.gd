@@ -48,7 +48,7 @@ static func world1_levels() -> Array[Dictionary]:
 
 
 static func world2_levels() -> Array[Dictionary]:
-	# Same music files as World 1 (1.mp3…7.mp3) so playback starts instantly on web.
+	# Original World 2 tracks in assets/music/world2/ (same play-from-0 start as World 1).
 	return [
 		_lvl(13, 2, "PILTOVER DAWN", 168, 900, 2.2, true, true, true, true, 0.15, 0.15, 0.55, 0.44, 300, "Upper: everything", 1),
 		_lvl(14, 2, "BRIDGE LIGHTS", 172, 880, 2.15, true, true, true, true, 0.16, 0.16, 0.56, 0.44, 320, "Upper: everything", 2),
@@ -67,6 +67,8 @@ static func _lvl(
 	clear_xp: int, hint: String, music_fallback: int
 ) -> Dictionary:
 	var music := "res://assets/music/%d.mp3" % clampi(music_fallback, 1, 12)
+	if world == 2:
+		music = "res://assets/music/world2/%d.mp3" % clampi(music_fallback, 1, 7)
 	return {
 		"id": id,
 		"world": world,

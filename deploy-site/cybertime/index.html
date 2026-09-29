@@ -2,7 +2,10 @@
 <html lang="en" dir="ltr">
 	<head>
 		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, viewport-fit=cover">
+		<meta name="apple-mobile-web-app-capable" content="yes">
+		<meta name="mobile-web-app-capable" content="yes">
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 		<title>CyberTime</title>
 		<link rel="preload" href="index.js" as="script">
 		<link rel="preload" href="index.wasm" as="fetch" crossorigin>
@@ -98,6 +101,21 @@ body {
 	min-height: 2.6em;
 }
 
+#boot-start {
+	display: none;
+	margin-top: 8px;
+	padding: 14px 28px;
+	border: 1px solid rgba(0, 255, 200, 0.55);
+	border-radius: 999px;
+	background: rgba(0, 255, 200, 0.12);
+	color: #00ffc8;
+	font: inherit;
+	font-size: 1rem;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	cursor: pointer;
+}
+
 #status-progress, #status-notice {
 	display: none;
 }
@@ -139,6 +157,7 @@ body {
 	padding: 1rem;
 	text-align: center;
 	z-index: 1;
+	max-width: 28rem;
 }
 
 @keyframes boot-pulse {
@@ -146,9 +165,7 @@ body {
 	50% { opacity: 1; transform: scale(1.03); }
 }
 		</style>
-		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
-<link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
-<base href="/cybertime/"><link rel="preload" href="index.wasm" as="fetch" crossorigin><link rel="preload" href="index.pck" as="fetch" crossorigin><link rel="preload" href="index.js" as="script">
+		<base href="/cybertime/">
 	</head>
 	<body>
 		<canvas id="canvas">
@@ -165,13 +182,14 @@ body {
 			<div id="boot-bytes">Preparing download…</div>
 			<img id="status-splash" class="show-image--false fullsize--false use-filter--false" src="index.png" alt="">
 			<progress id="status-progress"></progress>
+			<button id="boot-start" type="button">Tap to start</button>
 			<div id="boot-tip">Tip: turn MOBILE ON for tap controls</div>
 			<div id="status-notice"></div>
 		</div>
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":20341340,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":9651996,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
@@ -180,14 +198,16 @@ const engine = new Engine(GODOT_CONFIG);
 	const statusProgress = document.getElementById('status-progress');
 	const statusNotice = document.getElementById('status-notice');
 	const bootBytes = document.getElementById('boot-bytes');
+	const bootSub = document.getElementById('boot-sub');
 	const bootTip = document.getElementById('boot-tip');
+	const bootStart = document.getElementById('boot-start');
 	const tips = [
 		'Tip: blue = tap / left click',
 		'Tip: red bombs need 2 taps on mobile',
 		'Tip: orange = 3 taps on mobile',
 		'Tip: hit sliders anywhere on the orb',
 		'Tip: build combo for bigger scores',
-		'Tip: World 2 is late-game heat',
+		'Tip: World 2 has its own tracks',
 		'Tip: shop backgrounds change the arena',
 	];
 	let tipIndex = 0;
@@ -196,8 +216,14 @@ const engine = new Engine(GODOT_CONFIG);
 		if (bootTip) bootTip.textContent = tips[tipIndex];
 	}, 2800);
 
+	const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+		|| (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+	const preferTapStart = isIOS || (navigator.maxTouchPoints > 0 && /Mobile|Android/i.test(navigator.userAgent));
+
 	let initializing = true;
 	let statusMode = '';
+	let startTimer = null;
+	let downloadDone = false;
 
 	function setStatusMode(mode) {
 		if (statusMode === mode || !initializing) {
@@ -205,6 +231,7 @@ const engine = new Engine(GODOT_CONFIG);
 		}
 		if (mode === 'hidden') {
 			clearInterval(tipTimer);
+			if (startTimer) clearTimeout(startTimer);
 			statusOverlay.remove();
 			initializing = false;
 			return;
@@ -229,15 +256,55 @@ const engine = new Engine(GODOT_CONFIG);
 	function displayFailureNotice(err) {
 		console.error(err);
 		clearInterval(tipTimer);
+		if (startTimer) clearTimeout(startTimer);
+		bootStart.style.display = 'none';
+		let msg = 'An unknown error occurred.';
 		if (err instanceof Error) {
-			setStatusNotice(err.message);
+			msg = err.message || String(err);
 		} else if (typeof err === 'string') {
-			setStatusNotice(err);
-		} else {
-			setStatusNotice('An unknown error occurred.');
+			msg = err;
 		}
+		if (/out of memory|OOM|sab|SharedArrayBuffer/i.test(msg)) {
+			msg = 'Phone ran out of memory starting the game.\nClose other tabs and tap reload.';
+		}
+		setStatusNotice(msg);
 		setStatusMode('notice');
+		if (bootSub) bootSub.textContent = 'Start failed';
+		if (bootBytes) bootBytes.textContent = 'Try a refresh';
 		initializing = false;
+	}
+
+	function markDownloadProgress(current, total) {
+		if (current > 0 && total > 0) {
+			statusProgress.value = current;
+			statusProgress.max = total;
+			const mb = (v) => (v / (1024 * 1024)).toFixed(1);
+			const pct = Math.min(100, Math.round((current / total) * 100));
+			if (bootBytes) bootBytes.textContent = pct + '%  ·  ' + mb(current) + ' / ' + mb(total) + ' MB';
+			if (pct >= 100 && !downloadDone) {
+				downloadDone = true;
+				if (bootSub) bootSub.textContent = preferTapStart ? 'Ready' : 'Starting engine';
+				if (bootBytes) bootBytes.textContent = preferTapStart ? 'Download complete' : 'Compiling game…';
+			}
+		} else {
+			statusProgress.removeAttribute('value');
+			statusProgress.removeAttribute('max');
+			if (bootBytes) bootBytes.textContent = 'Downloading game data…';
+		}
+	}
+
+	function beginGame() {
+		bootStart.style.display = 'none';
+		if (bootSub) bootSub.textContent = 'Starting engine';
+		if (bootBytes) bootBytes.textContent = 'Compiling game…';
+		startTimer = setTimeout(() => {
+			displayFailureNotice('Startup timed out on this phone.\nClose other apps and reload.');
+		}, 45000);
+		return engine.startGame({
+			'onProgress': markDownloadProgress,
+		}).then(() => {
+			setStatusMode('hidden');
+		}, displayFailureNotice);
 	}
 
 	const missing = Engine.getMissingFeatures({
@@ -273,26 +340,32 @@ const engine = new Engine(GODOT_CONFIG);
 		}
 	} else {
 		setStatusMode('progress');
-		engine.startGame({
-			'onProgress': function (current, total) {
-				if (current > 0 && total > 0) {
-					statusProgress.value = current;
-					statusProgress.max = total;
-					if (bootBytes) {
-						const mb = (v) => (v / (1024 * 1024)).toFixed(1);
-						const pct = Math.min(100, Math.round((current / total) * 100));
-						bootBytes.textContent = pct + '%  ·  ' + mb(current) + ' / ' + mb(total) + ' MB';
-					}
-				} else {
-					statusProgress.removeAttribute('value');
-					statusProgress.removeAttribute('max');
-					if (bootBytes) bootBytes.textContent = 'Downloading game data…';
-				}
-			},
-		}).then(() => {
-			setStatusMode('hidden');
-		}, displayFailureNotice);
+		if (preferTapStart) {
+			if (bootSub) bootSub.textContent = 'Ready on phone';
+			if (bootBytes) bootBytes.textContent = 'Tap below to download & start';
+			statusProgress.style.display = 'none';
+			bootStart.style.display = 'block';
+			if (bootTip) bootTip.textContent = 'iPhone needs a tap to unlock audio + start';
+			bootStart.onclick = () => {
+				statusProgress.style.display = 'block';
+				beginGame();
+			};
+		} else {
+			beginGame();
+		}
 	}
+
+	// Used by the in-game FULLSCREEN button on web.
+	window.cybertimeToggleFullscreen = function () {
+		const node = document.documentElement;
+		if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+			const req = node.requestFullscreen || node.webkitRequestFullscreen;
+			if (req) req.call(node);
+			return;
+		}
+		const exit = document.exitFullscreen || document.webkitExitFullscreen;
+		if (exit) exit.call(document);
+	};
 }());
 		</script>
 	</body>

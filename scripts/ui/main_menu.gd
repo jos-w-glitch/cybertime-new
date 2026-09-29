@@ -8,6 +8,7 @@ extends Control
 @onready var shop_btn: Button = $Center/VBox/Shop
 @onready var how_btn: Button = $Center/VBox/HowTo
 @onready var mobile_btn: Button = $Center/VBox/Mobile
+@onready var fullscreen_btn: Button = $Center/VBox/Fullscreen
 @onready var home_btn: Button = $Home
 @onready var how_panel: PanelContainer = $HowPanel
 
@@ -19,6 +20,7 @@ func _ready() -> void:
 	_style_ui()
 	_refresh_stats()
 	_refresh_mobile_btn()
+	_refresh_fullscreen_btn()
 	_add_logo()
 	_place_home_btn()
 	play_btn.pressed.connect(_on_play)
@@ -30,6 +32,7 @@ func _ready() -> void:
 	)
 	how_btn.pressed.connect(func() -> void: how_panel.visible = not how_panel.visible)
 	mobile_btn.pressed.connect(_toggle_mobile)
+	fullscreen_btn.pressed.connect(_toggle_fullscreen)
 	home_btn.pressed.connect(_go_home)
 	$HowPanel/Margin/VBox/Close.pressed.connect(func() -> void: how_panel.visible = false)
 	AudioManager.play_menu_music()
@@ -61,6 +64,28 @@ func _toggle_mobile() -> void:
 
 func _refresh_mobile_btn() -> void:
 	mobile_btn.text = "MOBILE: ON" if SaveManager.mobile_mode else "MOBILE: OFF"
+
+
+func _toggle_fullscreen() -> void:
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("window.cybertimeToggleFullscreen && window.cybertimeToggleFullscreen()")
+		_refresh_fullscreen_btn()
+		return
+	var win := get_window()
+	if win.mode == Window.MODE_FULLSCREEN or win.mode == Window.MODE_EXCLUSIVE_FULLSCREEN:
+		win.mode = Window.MODE_WINDOWED
+	else:
+		win.mode = Window.MODE_FULLSCREEN
+	_refresh_fullscreen_btn()
+
+
+func _refresh_fullscreen_btn() -> void:
+	if OS.has_feature("web"):
+		fullscreen_btn.text = "FULLSCREEN"
+		return
+	var win := get_window()
+	var on := win.mode == Window.MODE_FULLSCREEN or win.mode == Window.MODE_EXCLUSIVE_FULLSCREEN
+	fullscreen_btn.text = "FULLSCREEN: ON" if on else "FULLSCREEN"
 
 
 func _add_logo() -> void:
@@ -109,7 +134,7 @@ func _style_ui() -> void:
 	subtitle.text = "HIT ON THE BEAT"
 	stats.add_theme_font_override("font", font)
 	stats.add_theme_color_override("font_color", LevelData.COLORS.gold)
-	for btn: Button in [play_btn, infinite_btn, shop_btn, how_btn, mobile_btn, $HowPanel/Margin/VBox/Close]:
+	for btn: Button in [play_btn, infinite_btn, shop_btn, how_btn, mobile_btn, fullscreen_btn, $HowPanel/Margin/VBox/Close]:
 		btn.add_theme_font_override("font", font)
 		btn.add_theme_font_size_override("font_size", 28)
 	home_btn.add_theme_font_override("font", font)
