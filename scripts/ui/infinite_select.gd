@@ -7,8 +7,8 @@ const Catalog := preload("res://scripts/systems/infinite_catalog.gd")
 @onready var track_label: Label = $Margin/VBox/TrackLabel
 @onready var mech_label: Label = $Margin/VBox/MechLabel
 @onready var best_label: Label = $Margin/VBox/Best
-@onready var track_dropdown: OptionButton = $Margin/VBox/TrackDropdown
-@onready var mech_dropdown: OptionButton = $Margin/VBox/MechDropdown
+@onready var track_dropdown: TouchDropdown = $Margin/VBox/TrackDropdown
+@onready var mech_dropdown: TouchDropdown = $Margin/VBox/MechDropdown
 @onready var start_btn: Button = $Margin/VBox/Start
 @onready var back_btn: Button = $Margin/VBox/Back
 
@@ -22,6 +22,8 @@ func _ready() -> void:
 	_fill_dropdowns()
 	track_dropdown.item_selected.connect(_on_track_selected)
 	mech_dropdown.item_selected.connect(_on_mech_selected)
+	track_dropdown.opened.connect(func() -> void: mech_dropdown.close())
+	mech_dropdown.opened.connect(func() -> void: track_dropdown.close())
 	start_btn.pressed.connect(_start)
 	back_btn.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/ui/main_menu.tscn")
@@ -39,7 +41,9 @@ func _style(font: Font) -> void:
 	yen_label.add_theme_color_override("font_color", LevelData.COLORS.gold)
 	track_label.text = "TRACK"
 	mech_label.text = "MECHANICS"
-	for btn: BaseButton in [track_dropdown, mech_dropdown, start_btn, back_btn]:
+	track_dropdown.set_dropdown_font(font, 24)
+	mech_dropdown.set_dropdown_font(font, 24)
+	for btn: Button in [start_btn, back_btn]:
 		btn.add_theme_font_override("font", font)
 		btn.add_theme_font_size_override("font_size", 24)
 	start_btn.text = "START RUN"
