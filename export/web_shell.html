@@ -223,7 +223,11 @@ const engine = new Engine(GODOT_CONFIG);
 	let initializing = true;
 	let statusMode = '';
 	let startTimer = null;
-	let downloadDone = false;
+	let prefetchDone = false;
+	let startRequested = false;
+
+	const CACHE_NAME = 'cybertime-assets-v3';
+	const ASSET_FILES = ['index.wasm', 'index.pck', 'index.js'];
 
 	function setStatusMode(mode) {
 		if (statusMode === mode || !initializing) {
@@ -281,11 +285,6 @@ const engine = new Engine(GODOT_CONFIG);
 			const mb = (v) => (v / (1024 * 1024)).toFixed(1);
 			const pct = Math.min(100, Math.round((current / total) * 100));
 			if (bootBytes) bootBytes.textContent = pct + '%  ·  ' + mb(current) + ' / ' + mb(total) + ' MB';
-			if (pct >= 100 && !downloadDone) {
-				downloadDone = true;
-				if (bootSub) bootSub.textContent = preferTapStart ? 'Ready' : 'Starting engine';
-				if (bootBytes) bootBytes.textContent = preferTapStart ? 'Download complete' : 'Compiling game…';
-			}
 		} else {
 			statusProgress.removeAttribute('value');
 			statusProgress.removeAttribute('max');
@@ -293,10 +292,73 @@ const engine = new Engine(GODOT_CONFIG);
 		}
 	}
 
+	async function fetchIntoCache(url, onChunk) {
+		// Stream to disk/HTTP cache without keeping the whole file in JS memory.
+		const response = await fetch(url, { credentials: 'same-origin', cache: 'reload' });
+		if (!response.ok) {
+			throw new Error('Failed to download ' + url);
+		}
+		const lenHeader = response.headers.get('Content-Length');
+		const total = lenHeader ? parseInt(lenHeader, 10) : 0;
+		if (!response.body || !response.body.getReader) {
+			const buf = await response.arrayBuffer();
+			onChunk(buf.byteLength, buf.byteLength || total);
+			return;
+		}
+		const reader = response.body.getReader();
+		let received = 0;
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			received += value.byteLength;
+			onChunk(received, total > 0 ? total : received);
+		}
+	}
+
+	async function prefetchAssets() {
+		if (bootSub) bootSub.textContent = 'Downloading';
+		statusProgress.style.display = 'block';
+		const sizes = GODOT_CONFIG.fileSizes || {};
+		const knownTotal = (sizes['index.wasm'] || 0) + (sizes['index.pck'] || 0);
+		const progress = { wasm: 0, pck: 0, wasmTotal: sizes['index.wasm'] || 0, pckTotal: sizes['index.pck'] || 0 };
+
+		function report() {
+			const current = progress.wasm + progress.pck;
+			const total = (progress.wasmTotal + progress.pckTotal) || knownTotal || current;
+			markDownloadProgress(current, total);
+		}
+
+		await Promise.all([
+			fetchIntoCache('index.wasm', (n, t) => {
+				progress.wasm = n;
+				if (t > 0) progress.wasmTotal = t;
+				report();
+			}),
+			fetchIntoCache('index.pck', (n, t) => {
+				progress.pck = n;
+				if (t > 0) progress.pckTotal = t;
+				report();
+			}),
+		]);
+		// Warm JS too (small).
+		fetch('index.js', { credentials: 'same-origin', cache: 'force-cache' }).catch(() => {});
+		prefetchDone = true;
+		const total = progress.wasmTotal + progress.pckTotal;
+		markDownloadProgress(total, total);
+		if (bootSub) bootSub.textContent = 'Ready';
+		if (bootBytes) bootBytes.textContent = 'Download complete';
+		if (preferTapStart && !startRequested) {
+			bootStart.style.display = 'block';
+			if (bootTip) bootTip.textContent = 'Tap to start — files are cached on this phone';
+		}
+	}
+
 	function beginGame() {
+		startRequested = true;
 		bootStart.style.display = 'none';
 		if (bootSub) bootSub.textContent = 'Starting engine';
 		if (bootBytes) bootBytes.textContent = 'Compiling game…';
+		statusProgress.style.display = 'block';
 		startTimer = setTimeout(() => {
 			displayFailureNotice('Startup timed out on this phone.\nClose other apps and reload.');
 		}, 45000);
@@ -341,13 +403,25 @@ const engine = new Engine(GODOT_CONFIG);
 	} else {
 		setStatusMode('progress');
 		if (preferTapStart) {
-			if (bootSub) bootSub.textContent = 'Ready on phone';
-			if (bootBytes) bootBytes.textContent = 'Tap below to download & start';
-			statusProgress.style.display = 'none';
+			if (bootTip) bootTip.textContent = 'Downloading in the background — tap when ready';
+			bootStart.style.display = 'none';
+			prefetchAssets().then(() => {
+				bootStart.onclick = () => beginGame();
+				if (startRequested) beginGame();
+			}).catch((err) => {
+				console.warn('Prefetch failed, falling back', err);
+				bootStart.style.display = 'block';
+				if (bootSub) bootSub.textContent = 'Ready on phone';
+				if (bootBytes) bootBytes.textContent = 'Tap to download & start';
+				bootStart.onclick = () => beginGame();
+			});
+			// Allow early tap: start as soon as user taps, even mid-download.
 			bootStart.style.display = 'block';
-			if (bootTip) bootTip.textContent = 'iPhone needs a tap to unlock audio + start';
+			bootStart.textContent = 'Tap to start';
 			bootStart.onclick = () => {
-				statusProgress.style.display = 'block';
+				if (!prefetchDone) {
+					if (bootSub) bootSub.textContent = 'Finishing download';
+				}
 				beginGame();
 			};
 		} else {
@@ -355,7 +429,10 @@ const engine = new Engine(GODOT_CONFIG);
 		}
 	}
 
-	// Used by the in-game FULLSCREEN button on web.
+	if ('serviceWorker' in navigator) {
+		navigator.serviceWorker.register('sw.js').catch(() => {});
+	}
+
 	window.cybertimeToggleFullscreen = function () {
 		const node = document.documentElement;
 		if (!document.fullscreenElement && !document.webkitFullscreenElement) {

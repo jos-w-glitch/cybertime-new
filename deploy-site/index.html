@@ -7,6 +7,9 @@
   <meta name="description" content="joseph-weiss.com — projects and games">
   <link rel="icon" type="image/png" href="cybertime/assets/icon-192.png">
   <link rel="canonical" href="https://www.joseph-weiss.com/">
+  <link rel="prefetch" href="/cybertime/index.wasm" as="fetch" crossorigin>
+  <link rel="prefetch" href="/cybertime/index.pck" as="fetch" crossorigin>
+  <link rel="prefetch" href="/cybertime/index.js" as="script">
   <style>
 @font-face {
   font-family: "Cyberjunkies";
@@ -411,6 +414,22 @@ body {
   <script type="module">
     import { inject } from "/analytics.mjs";
     inject();
+    // Warm CyberTime assets while user is on the homepage (big phone win).
+    const warm = () => {
+      ['/cybertime/index.wasm', '/cybertime/index.pck', '/cybertime/index.js'].forEach((url) => {
+        fetch(url, { credentials: 'same-origin', mode: 'no-cors' }).catch(() => {});
+      });
+    };
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(warm, { timeout: 1500 });
+    } else {
+      setTimeout(warm, 400);
+    }
+    const card = document.querySelector('a.project-card[href="/cybertime/"]');
+    if (card) {
+      card.addEventListener('pointerenter', warm, { once: true });
+      card.addEventListener('touchstart', warm, { once: true, passive: true });
+    }
   </script>
 </body>
 </html>
