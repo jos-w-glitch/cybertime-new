@@ -71,11 +71,6 @@ custom_minimum_size = Vector2(280, 56)
 layout_mode = 2
 text = "MOBILE: OFF"
 
-[node name="Fullscreen" type="Button" parent="Center/VBox"]
-custom_minimum_size = Vector2(280, 56)
-layout_mode = 2
-text = "FULLSCREEN"
-
 [node name="Home" type="Button" parent="."]
 layout_mode = 1
 anchors_preset = 0
@@ -84,6 +79,15 @@ offset_top = 16.0
 offset_right = 112.0
 offset_bottom = 48.0
 text = "HOME"
+
+[node name="Fullscreen" type="Button" parent="."]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 1164.0
+offset_top = 16.0
+offset_right = 1264.0
+offset_bottom = 48.0
+text = "FULL"
 
 [node name="HowPanel" type="PanelContainer" parent="." unique_id=1949151206]
 visible = false
