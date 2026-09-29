@@ -182,7 +182,7 @@ body {
 			<div id="boot-bytes">Preparing download…</div>
 			<img id="status-splash" class="show-image--false fullsize--false use-filter--false" src="index.png" alt="">
 			<progress id="status-progress"></progress>
-			<button id="boot-start" type="button">Tap to start</button>
+			<button id="boot-start" type="button">Tap to retry</button>
 			<div id="boot-tip">Tip: turn MOBILE ON for tap controls</div>
 			<div id="status-notice"></div>
 		</div>
@@ -216,18 +216,11 @@ const engine = new Engine(GODOT_CONFIG);
 		if (bootTip) bootTip.textContent = tips[tipIndex];
 	}, 2800);
 
-	const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-		|| (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-	const preferTapStart = isIOS || (navigator.maxTouchPoints > 0 && /Mobile|Android/i.test(navigator.userAgent));
-
 	let initializing = true;
 	let statusMode = '';
 	let startTimer = null;
-	let prefetchDone = false;
-	let startRequested = false;
-
-	const CACHE_NAME = 'cybertime-assets-v3';
-	const ASSET_FILES = ['index.wasm', 'index.pck', 'index.js'];
+	let started = false;
+	let startAttempts = 0;
 
 	function setStatusMode(mode) {
 		if (statusMode === mode || !initializing) {
@@ -261,7 +254,6 @@ const engine = new Engine(GODOT_CONFIG);
 		console.error(err);
 		clearInterval(tipTimer);
 		if (startTimer) clearTimeout(startTimer);
-		bootStart.style.display = 'none';
 		let msg = 'An unknown error occurred.';
 		if (err instanceof Error) {
 			msg = err.message || String(err);
@@ -269,12 +261,15 @@ const engine = new Engine(GODOT_CONFIG);
 			msg = err;
 		}
 		if (/out of memory|OOM|sab|SharedArrayBuffer/i.test(msg)) {
-			msg = 'Phone ran out of memory starting the game.\nClose other tabs and tap reload.';
+			msg = 'Phone ran out of memory starting the game.\nClose other tabs and tap retry.';
 		}
 		setStatusNotice(msg);
 		setStatusMode('notice');
 		if (bootSub) bootSub.textContent = 'Start failed';
-		if (bootBytes) bootBytes.textContent = 'Try a refresh';
+		if (bootBytes) bootBytes.textContent = 'Tap retry';
+		bootStart.style.display = 'block';
+		bootStart.textContent = 'Tap to retry';
+		bootStart.onclick = () => window.location.reload();
 		initializing = false;
 	}
 
@@ -285,6 +280,10 @@ const engine = new Engine(GODOT_CONFIG);
 			const mb = (v) => (v / (1024 * 1024)).toFixed(1);
 			const pct = Math.min(100, Math.round((current / total) * 100));
 			if (bootBytes) bootBytes.textContent = pct + '%  ·  ' + mb(current) + ' / ' + mb(total) + ' MB';
+			if (pct >= 100) {
+				if (bootSub) bootSub.textContent = 'Starting engine';
+				if (bootBytes) bootBytes.textContent = 'Compiling game…';
+			}
 		} else {
 			statusProgress.removeAttribute('value');
 			statusProgress.removeAttribute('max');
@@ -292,81 +291,33 @@ const engine = new Engine(GODOT_CONFIG);
 		}
 	}
 
-	async function fetchIntoCache(url, onChunk) {
-		// Stream to disk/HTTP cache without keeping the whole file in JS memory.
-		const response = await fetch(url, { credentials: 'same-origin', cache: 'reload' });
-		if (!response.ok) {
-			throw new Error('Failed to download ' + url);
-		}
-		const lenHeader = response.headers.get('Content-Length');
-		const total = lenHeader ? parseInt(lenHeader, 10) : 0;
-		if (!response.body || !response.body.getReader) {
-			const buf = await response.arrayBuffer();
-			onChunk(buf.byteLength, buf.byteLength || total);
-			return;
-		}
-		const reader = response.body.getReader();
-		let received = 0;
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			received += value.byteLength;
-			onChunk(received, total > 0 ? total : received);
-		}
-	}
-
-	async function prefetchAssets() {
-		if (bootSub) bootSub.textContent = 'Downloading';
-		statusProgress.style.display = 'block';
-		const sizes = GODOT_CONFIG.fileSizes || {};
-		const knownTotal = (sizes['index.wasm'] || 0) + (sizes['index.pck'] || 0);
-		const progress = { wasm: 0, pck: 0, wasmTotal: sizes['index.wasm'] || 0, pckTotal: sizes['index.pck'] || 0 };
-
-		function report() {
-			const current = progress.wasm + progress.pck;
-			const total = (progress.wasmTotal + progress.pckTotal) || knownTotal || current;
-			markDownloadProgress(current, total);
-		}
-
-		await Promise.all([
-			fetchIntoCache('index.wasm', (n, t) => {
-				progress.wasm = n;
-				if (t > 0) progress.wasmTotal = t;
-				report();
-			}),
-			fetchIntoCache('index.pck', (n, t) => {
-				progress.pck = n;
-				if (t > 0) progress.pckTotal = t;
-				report();
-			}),
-		]);
-		// Warm JS too (small).
-		fetch('index.js', { credentials: 'same-origin', cache: 'force-cache' }).catch(() => {});
-		prefetchDone = true;
-		const total = progress.wasmTotal + progress.pckTotal;
-		markDownloadProgress(total, total);
-		if (bootSub) bootSub.textContent = 'Ready';
-		if (bootBytes) bootBytes.textContent = 'Download complete';
-		if (preferTapStart && !startRequested) {
-			bootStart.style.display = 'block';
-			if (bootTip) bootTip.textContent = 'Tap to start — files are cached on this phone';
-		}
-	}
-
 	function beginGame() {
-		startRequested = true;
+		if (started) return;
+		started = true;
+		startAttempts += 1;
 		bootStart.style.display = 'none';
-		if (bootSub) bootSub.textContent = 'Starting engine';
-		if (bootBytes) bootBytes.textContent = 'Compiling game…';
+		if (bootSub) bootSub.textContent = startAttempts > 1 ? 'Retrying' : 'Downloading';
+		if (bootBytes) bootBytes.textContent = 'Loading game data…';
 		statusProgress.style.display = 'block';
+		const isPhone = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+			|| (navigator.maxTouchPoints > 1 && /Mobile/i.test(navigator.userAgent));
 		startTimer = setTimeout(() => {
-			displayFailureNotice('Startup timed out on this phone.\nClose other apps and reload.');
-		}, 45000);
+			displayFailureNotice('Startup timed out on this device.\nClose other apps and tap retry.');
+		}, isPhone ? 90000 : 60000);
 		return engine.startGame({
 			'onProgress': markDownloadProgress,
 		}).then(() => {
 			setStatusMode('hidden');
-		}, displayFailureNotice);
+		}, (err) => {
+			console.warn('startGame failed', err);
+			started = false;
+			if (startTimer) clearTimeout(startTimer);
+			if (startAttempts < 2) {
+				setTimeout(() => beginGame(), 500);
+				return;
+			}
+			displayFailureNotice(err);
+		});
 	}
 
 	const missing = Engine.getMissingFeatures({
@@ -401,36 +352,9 @@ const engine = new Engine(GODOT_CONFIG);
 			displayFailureNotice(missingMsg + missing.join('\n'));
 		}
 	} else {
+		// Same path as PC: auto-start immediately (no tap gate).
 		setStatusMode('progress');
-		if (preferTapStart) {
-			if (bootTip) bootTip.textContent = 'Downloading in the background — tap when ready';
-			bootStart.style.display = 'none';
-			prefetchAssets().then(() => {
-				bootStart.onclick = () => beginGame();
-				if (startRequested) beginGame();
-			}).catch((err) => {
-				console.warn('Prefetch failed, falling back', err);
-				bootStart.style.display = 'block';
-				if (bootSub) bootSub.textContent = 'Ready on phone';
-				if (bootBytes) bootBytes.textContent = 'Tap to download & start';
-				bootStart.onclick = () => beginGame();
-			});
-			// Allow early tap: start as soon as user taps, even mid-download.
-			bootStart.style.display = 'block';
-			bootStart.textContent = 'Tap to start';
-			bootStart.onclick = () => {
-				if (!prefetchDone) {
-					if (bootSub) bootSub.textContent = 'Finishing download';
-				}
-				beginGame();
-			};
-		} else {
-			beginGame();
-		}
-	}
-
-	if ('serviceWorker' in navigator) {
-		navigator.serviceWorker.register('sw.js').catch(() => {});
+		beginGame();
 	}
 
 	window.cybertimeToggleFullscreen = function () {
